@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Object Detection</title>
+<!--    <link rel="stylesheet" href="./style.css">-->
+<!--    <link rel="icon" href="./favicon.ico" type="image/x-icon">-->
+  </head>
+  <body>
+    <main>
+        <h1>Object Detection Website</h1>
+        <p>Upload an image to see which objects are in the image.</p>
+        <form action="/submit" method="post" enctype="multipart/form-data">
+            <input type="file" class="image" name="file" accept="image/*">
+            <input type="submit" class="submit">
+        </form>
+    </main>
+  </body>
+</html>

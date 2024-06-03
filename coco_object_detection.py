@@ -656,4 +656,5 @@ def evaluate(image_set):
 
 if __name__ == "__main__":
     image = cv2.imread("./images/dog_bike_car.jpg")
+    print(type(image))
     evaluate([image])
