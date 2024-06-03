@@ -10,7 +10,7 @@ Original file is located at
 
 This project attempts to implement and train a YOLO (You Only Look Once) Object Detection model on the COCO 2017 dataset.
 """
-
+from __future__ import division
 # Commented out IPython magic to ensure Python compatibility.
 # %matplotlib inline
 from pycocotools.coco import COCO
@@ -24,9 +24,10 @@ import pylab
 from zipfile import ZipFile, BadZipFile
 import os
 import pathlib
+
 pylab.rcParams['figure.figsize'] = (8.0, 10.0)
 
-from __future__ import division
+
 
 import torch
 import torch.nn as nn
@@ -36,114 +37,25 @@ import cv2
 import time
 import pickle as pkl
 
-from google.colab import drive
-drive.mount('/content/drive')
-
-# downloading the datasets
-
-# !wget http://images.cocodataset.org/zips/train2017.zip -O coco_train2017.zip
-# !wget http://images.cocodataset.org/zips/val2017.zip -O coco_val2017.zip
-# !wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip -O coco_ann2017.zip
-
-# ROOT = "./coco"
-# IMAGES_PATH = str(ROOT + "/images")
-# ANNOTATIONS_PATH = str(ROOT + "/instances.json")
-
-# dataset = datasets.CocoDetection(IMAGES_PATH, ANNOTATIONS_PATH)
-
-# from google.colab import drive
-# run once to mount drive
-# drive.mount('/content/drive')
-
-# Move files from drive, run if files are not already in root folder
-# !cp "/content/drive/MyDrive/Coco Datasets/coco_ann2017.zip" "."
-# !cp "/content/drive/MyDrive/Coco Datasets/coco_val2017.zip" "."
-
-# extract zip files
-def extract_zip_file(extract_path):
-    try:
-        with ZipFile(extract_path+".zip") as zfile:
-            zfile.extractall(extract_path)
-        # remove zipfile
-        zfileTOremove=f"{extract_path}"+".zip"
-        if os.path.isfile(zfileTOremove):
-            os.remove(zfileTOremove)
-        else:
-            print("Error: %s file not found" % zfileTOremove)
-    except BadZipFile as e:
-        print("Error:", e)
-
-# extract_train_path = "./coco_train2017"
-extract_val_path = "./coco_val2017"
-extract_ann_path="./coco_ann2017"
-# extract_zip_file(extract_train_path)
-extract_zip_file(extract_val_path)
-extract_zip_file(extract_ann_path)
-
-dataDir='./coco_ann2017'
-dataType='train2017'
-annFile='{}/annotations/instances_{}.json'.format(dataDir,dataType)
-
-coco = COCO(annFile)
 
 # Display image using the given image and (optionally) annotation
 
-def show_coco_image(image, annotations = None):
-  # Retrieve image dimensions
-  height, width = image['height'], image['width']
-
-  # Create a new figure with the same dimensions as the image
-  fig, ax = plt.subplots(figsize=(10,10), dpi=100)
-
-  I = io.imread(image['coco_url'])
-  # Display the original image
-  ax.imshow(I)
-  ax.axis('off')
-  ax.set_title("Image ID: {}".format(image["id"]))
-
-  # Draw bounding boxes on the original image
-  if (annotations):
-    for annotation in annotations:
-        bbox = annotation['bbox']
-        category_id = annotation['category_id']
-        category_name = coco.loadCats(category_id)[0]['name']
-
-        # Convert COCO bounding box format (x, y, width, height) to matplotlib format (xmin, ymin, xmax, ymax)
-        xmin, ymin, width, height = bbox
-        xmax = xmin + width
-        ymax = ymin + height
-
-        # Draw the bounding box rectangle
-        rect = patches.Rectangle((xmin, ymin), width, height, linewidth=1, edgecolor='red', facecolor='none')
-        ax.add_patch(rect)
-
-        # Add the category name as a label above the bounding box
-        ax.text(xmin, ymin - 5, category_name, fontsize=8, color='red', weight='bold')
-
-# Show the plot
-  plt.show()
-# Clear plot after showing
-  ax.clear()
-  plt.clf()
-  plt.cla()
-  plt.close()
-
 def show_image(image):
+    # Create a new figure with the same dimensions as the image
+    fig, ax = plt.subplots(figsize=(10, 10), dpi=100)
 
-  # Create a new figure with the same dimensions as the image
-  fig, ax = plt.subplots(figsize=(10,10), dpi=100)
+    # Display image
+    ax.imshow(image)
+    ax.axis('off')
 
-  # Display image
-  ax.imshow(image)
-  ax.axis('off')
+    # Show the plot
+    plt.show()
+    # Clear plot after showing
+    ax.clear()
+    plt.clf()
+    plt.cla()
+    plt.close()
 
-# Show the plot
-  plt.show()
-# Clear plot after showing
-  ax.clear()
-  plt.clf()
-  plt.cla()
-  plt.close()
 
 # helpers for acquiring annotations
 
@@ -153,43 +65,18 @@ def show_image(image):
 @param image: an image we want to find annotations for
 @return A list of annotations (bounding box + category)
 '''
+
+
 def get_annotations_for_image(dict, image):
-  return list(dict[image["id"]].values())[0]
+    return list(dict[image["id"]].values())[0]
+
 
 '''
 @param data: an image set following Coco file format
 @return a 2d dictionary where an image id is associated with a dictionary object that contains all annotations related to that id
 '''
-def create_label_dict(data):
-  data_id = np.array([d["id"] for d in data])
-
-  labelled_data = coco.loadAnns(coco.getAnnIds(imgIds = data_id))
-  label_dict = {}
-  for labels in labelled_data:
-    image_id = labels['image_id']
-
-    if (image_id not in label_dict):
-      label_dict[image_id] = {}
-      label_dict_entry = label_dict[image_id]
-      label_dict_entry["annotations"] = []
-
-    label_dict_entry = label_dict[image_id]
-    annotation_entry = {"id": labels["id"], "category_id": labels["category_id"], "bbox": labels["bbox"]}
-    label_dict_entry["annotations"].append(annotation_entry)
-
-  return label_dict
-
-# General initialization
-# use official cfg file
-!mkdir cfg
-!cd cfg
-!wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg
-
-# use official weight file
-!wget https://pjreddie.com/media/files/yolov3.weights
 
 # utilities
-
 
 
 def unique(tensor):
@@ -208,131 +95,132 @@ def bbox_iou(box1, box2):
 
 
     """
-    #Get the coordinates of bounding boxes
-    b1_x1, b1_y1, b1_x2, b1_y2 = box1[:,0], box1[:,1], box1[:,2], box1[:,3]
-    b2_x1, b2_y1, b2_x2, b2_y2 = box2[:,0], box2[:,1], box2[:,2], box2[:,3]
+    # Get the coordinates of bounding boxes
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
-    #get the corrdinates of the intersection rectangle
-    inter_rect_x1 =  torch.max(b1_x1, b2_x1)
-    inter_rect_y1 =  torch.max(b1_y1, b2_y1)
-    inter_rect_x2 =  torch.min(b1_x2, b2_x2)
-    inter_rect_y2 =  torch.min(b1_y2, b2_y2)
+    # get the corrdinates of the intersection rectangle
+    inter_rect_x1 = torch.max(b1_x1, b2_x1)
+    inter_rect_y1 = torch.max(b1_y1, b2_y1)
+    inter_rect_x2 = torch.min(b1_x2, b2_x2)
+    inter_rect_y2 = torch.min(b1_y2, b2_y2)
 
-    #Intersection area
-    inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min=0) * torch.clamp(inter_rect_y2 - inter_rect_y1 + 1, min=0)
+    # Intersection area
+    inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min=0) * torch.clamp(inter_rect_y2 - inter_rect_y1 + 1,
+                                                                                     min=0)
 
-    #Union Area
-    b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
-    b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
+    # Union Area
+    b1_area = (b1_x2 - b1_x1 + 1) * (b1_y2 - b1_y1 + 1)
+    b2_area = (b2_x2 - b2_x1 + 1) * (b2_y2 - b2_y1 + 1)
 
     iou = inter_area / (b1_area + b2_area - inter_area)
 
     return iou
 
-def write_results(prediction, confidence, num_classes, nms_conf = 0.4):
-    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
-    prediction = prediction*conf_mask
+
+def write_results(prediction, confidence, num_classes, nms_conf=0.4):
+    conf_mask = (prediction[:, :, 4] > confidence).float().unsqueeze(2)
+    prediction = prediction * conf_mask
 
     box_corner = prediction.new(prediction.shape)
-    box_corner[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
-    box_corner[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
-    box_corner[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2)
-    box_corner[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
-    prediction[:,:,:4] = box_corner[:,:,:4]
+    box_corner[:, :, 0] = (prediction[:, :, 0] - prediction[:, :, 2] / 2)
+    box_corner[:, :, 1] = (prediction[:, :, 1] - prediction[:, :, 3] / 2)
+    box_corner[:, :, 2] = (prediction[:, :, 0] + prediction[:, :, 2] / 2)
+    box_corner[:, :, 3] = (prediction[:, :, 1] + prediction[:, :, 3] / 2)
+    prediction[:, :, :4] = box_corner[:, :, :4]
 
     batch_size = prediction.size(0)
 
     write = False
 
-
-
     for ind in range(batch_size):
-        image_pred = prediction[ind]          #image Tensor
-       #confidence threshholding
-       #NMS
+        image_pred = prediction[ind]  # image Tensor
+        # confidence threshholding
+        # NMS
 
-        max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)
+        max_conf, max_conf_score = torch.max(image_pred[:, 5:5 + num_classes], 1)
         max_conf = max_conf.float().unsqueeze(1)
         max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:,:5], max_conf, max_conf_score)
+        seq = (image_pred[:, :5], max_conf, max_conf_score)
         image_pred = torch.cat(seq, 1)
 
-        non_zero_ind =  (torch.nonzero(image_pred[:,4]))
+        non_zero_ind = (torch.nonzero(image_pred[:, 4]))
         try:
-            image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
+            image_pred_ = image_pred[non_zero_ind.squeeze(), :].view(-1, 7)
         except:
             continue
 
         if image_pred_.shape[0] == 0:
             continue
-#
+        #
 
-        #Get the various classes detected in the image
-        img_classes = unique(image_pred_[:,-1])  # -1 index holds the class index
-
+        # Get the various classes detected in the image
+        img_classes = unique(image_pred_[:, -1])  # -1 index holds the class index
 
         for cls in img_classes:
-            #perform NMS
+            # perform NMS
 
+            # get the detections with one particular class
+            cls_mask = image_pred_ * (image_pred_[:, -1] == cls).float().unsqueeze(1)
+            class_mask_ind = torch.nonzero(cls_mask[:, -2]).squeeze()
+            image_pred_class = image_pred_[class_mask_ind].view(-1, 7)
 
-            #get the detections with one particular class
-            cls_mask = image_pred_*(image_pred_[:,-1] == cls).float().unsqueeze(1)
-            class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
-            image_pred_class = image_pred_[class_mask_ind].view(-1,7)
-
-            #sort the detections such that the entry with the maximum objectness
-            #confidence is at the top
-            conf_sort_index = torch.sort(image_pred_class[:,4], descending = True )[1]
+            # sort the detections such that the entry with the maximum objectness
+            # confidence is at the top
+            conf_sort_index = torch.sort(image_pred_class[:, 4], descending=True)[1]
             image_pred_class = image_pred_class[conf_sort_index]
-            idx = image_pred_class.size(0)   #Number of detections
+            idx = image_pred_class.size(0)  # Number of detections
 
             for i in range(idx):
-                #Get the IOUs of all boxes that come after the one we are looking at
-                #in the loop
+                # Get the IOUs of all boxes that come after the one we are looking at
+                # in the loop
                 try:
-                    ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i+1:])
+                    ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i + 1:])
                 except ValueError:
                     break
 
                 except IndexError:
                     break
 
-                #Zero out all the detections that have IoU > treshhold
+                # Zero out all the detections that have IoU > treshhold
                 iou_mask = (ious < nms_conf).float().unsqueeze(1)
-                image_pred_class[i+1:] *= iou_mask
+                image_pred_class[i + 1:] *= iou_mask
 
-                #Remove the non-zero entries
-                non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
-                image_pred_class = image_pred_class[non_zero_ind].view(-1,7)
+                # Remove the non-zero entries
+                non_zero_ind = torch.nonzero(image_pred_class[:, 4]).squeeze()
+                image_pred_class = image_pred_class[non_zero_ind].view(-1, 7)
 
-            batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)      #Repeat the batch_id for as many detections of the class cls in the image
+            batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(
+                ind)  # Repeat the batch_id for as many detections of the class cls in the image
             seq = batch_ind, image_pred_class
 
             if not write:
-                output = torch.cat(seq,1)
+                output = torch.cat(seq, 1)
                 write = True
             else:
-                out = torch.cat(seq,1)
-                output = torch.cat((output,out))
+                out = torch.cat(seq, 1)
+                output = torch.cat((output, out))
 
     try:
         return output
     except:
         return 0
 
+
 def letterbox_image(img, inp_dim):
     '''resize image with unchanged aspect ratio using padding'''
     img_w, img_h = img.shape[1], img.shape[0]
     w, h = inp_dim
-    new_w = int(img_w * min(w/img_w, h/img_h))
-    new_h = int(img_h * min(w/img_w, h/img_h))
-    resized_image = cv2.resize(img, (new_w,new_h), interpolation = cv2.INTER_CUBIC)
+    new_w = int(img_w * min(w / img_w, h / img_h))
+    new_h = int(img_h * min(w / img_w, h / img_h))
+    resized_image = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
 
     canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
 
-    canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
+    canvas[(h - new_h) // 2:(h - new_h) // 2 + new_h, (w - new_w) // 2:(w - new_w) // 2 + new_w, :] = resized_image
 
     return canvas
+
 
 def prep_image(img, inp_dim):
     """
@@ -341,63 +229,65 @@ def prep_image(img, inp_dim):
     Returns a Variable
     """
     img = (letterbox_image(img, (inp_dim, inp_dim)))
-    img = img[:,:,::-1].transpose((2,0,1)).copy()
+    img = img[:, :, ::-1].transpose((2, 0, 1)).copy()
     img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
     return img
+
 
 def load_classes(namesfile):
     fp = open(namesfile, "r")
     names = fp.read().split("\n")[:-1]
     return names
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
 
+def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
     batch_size = prediction.size(0)
-    stride =  inp_dim // prediction.size(2)
-    # grid_size = inp_dim // stride
-    grid_size = prediction.size(2)
+    stride = inp_dim // prediction.size(2)
+    grid_size = inp_dim // stride
+    #grid_size = prediction.size(2)
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
     # print(grid_size*grid_size)
-    prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
-    prediction = prediction.transpose(1,2).contiguous()
-    prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
-    anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
+    prediction = prediction.view(batch_size, bbox_attrs * num_anchors, grid_size * grid_size)
+    prediction = prediction.transpose(1, 2).contiguous()
+    prediction = prediction.view(batch_size, grid_size * grid_size * num_anchors, bbox_attrs)
+    anchors = [(a[0] / stride, a[1] / stride) for a in anchors]
 
-    #Sigmoid the  centre_X, centre_Y. and object confidencce
-    prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])
-    prediction[:,:,1] = torch.sigmoid(prediction[:,:,1])
-    prediction[:,:,4] = torch.sigmoid(prediction[:,:,4])
+    # Sigmoid the  centre_X, centre_Y. and object confidencce
+    prediction[:, :, 0] = torch.sigmoid(prediction[:, :, 0])
+    prediction[:, :, 1] = torch.sigmoid(prediction[:, :, 1])
+    prediction[:, :, 4] = torch.sigmoid(prediction[:, :, 4])
 
-    #Add the center offsets
+    # Add the center offsets
     grid = np.arange(grid_size)
-    a,b = np.meshgrid(grid, grid)
+    a, b = np.meshgrid(grid, grid)
 
-    x_offset = torch.FloatTensor(a).view(-1,1)
-    y_offset = torch.FloatTensor(b).view(-1,1)
+    x_offset = torch.FloatTensor(a).view(-1, 1)
+    y_offset = torch.FloatTensor(b).view(-1, 1)
 
     if CUDA:
         x_offset = x_offset.cuda()
         y_offset = y_offset.cuda()
 
-    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
+    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1, num_anchors).view(-1, 2).unsqueeze(0)
 
-    prediction[:,:,:2] += x_y_offset
+    prediction[:, :, :2] += x_y_offset
 
-    #log space transform height and the width
+    # log space transform height and the width
     anchors = torch.FloatTensor(anchors)
 
     if CUDA:
         anchors = anchors.cuda()
 
-    anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
-    prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
+    anchors = anchors.repeat(grid_size * grid_size, 1).unsqueeze(0)
+    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors
 
-    prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes]))
+    prediction[:, :, 5: 5 + num_classes] = torch.sigmoid((prediction[:, :, 5: 5 + num_classes]))
 
-    prediction[:,:,:4] *= stride
+    prediction[:, :, :4] *= stride
 
     return prediction
+
 
 # Darknet-53
 
@@ -411,22 +301,22 @@ def parse_cfg(cfgfile):
     """
 
     file = open(cfgfile, 'r')
-    lines = file.read().split('\n')                        # store the lines in a list
-    lines = [x for x in lines if len(x) > 0]               # get read of the empty lines
-    lines = [x for x in lines if x[0] != '#']              # get rid of comments
-    lines = [x.rstrip().lstrip() for x in lines]           # get rid of fringe whitespaces
+    lines = file.read().split('\n')  # store the lines in a list
+    lines = [x for x in lines if len(x) > 0]  # get read of the empty lines
+    lines = [x for x in lines if x[0] != '#']  # get rid of comments
+    lines = [x.rstrip().lstrip() for x in lines]  # get rid of fringe whitespaces
 
     block = {}
     blocks = []
 
     for line in lines:
-        if line[0] == "[":               # This marks the start of a new block
-            if len(block) != 0:          # If block is not empty, implies it is storing values of previous block.
-                blocks.append(block)     # add it the blocks list
-                block = {}               # re-init the block
+        if line[0] == "[":  # This marks the start of a new block
+            if len(block) != 0:  # If block is not empty, implies it is storing values of previous block.
+                blocks.append(block)  # add it the blocks list
+                block = {}  # re-init the block
             block["type"] = line[1:-1].rstrip()
         else:
-            key,value = line.split("=")
+            key, value = line.split("=")
             block[key.rstrip()] = value.lstrip()
     blocks.append(block)
 
@@ -444,9 +334,8 @@ class DetectionLayer(nn.Module):
         self.anchors = anchors
 
 
-
 def create_modules(blocks):
-    net_info = blocks[0]     #Captures the information about the input and pre-processing
+    net_info = blocks[0]  # Captures the information about the input and pre-processing
     module_list = nn.ModuleList()
     prev_filters = 3
     output_filters = []
@@ -454,13 +343,13 @@ def create_modules(blocks):
     for index, x in enumerate(blocks[1:]):
         module = nn.Sequential()
 
-        #check the type of block
-        #create a new module for the block
-        #append to module_list
+        # check the type of block
+        # create a new module for the block
+        # append to module_list
 
-        #If it's a convolutional layer
+        # If it's a convolutional layer
         if (x["type"] == "convolutional"):
-            #Get the info about the layer
+            # Get the info about the layer
             activation = x["activation"]
             try:
                 batch_normalize = int(x["batch_normalize"])
@@ -469,7 +358,7 @@ def create_modules(blocks):
                 batch_normalize = 0
                 bias = True
 
-            filters= int(x["filters"])
+            filters = int(x["filters"])
             padding = int(x["pad"])
             kernel_size = int(x["size"])
             stride = int(x["stride"])
@@ -479,39 +368,39 @@ def create_modules(blocks):
             else:
                 pad = 0
 
-            #Add the convolutional layer
-            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, pad, bias = bias)
+            # Add the convolutional layer
+            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, pad, bias=bias)
             module.add_module("conv_{0}".format(index), conv)
 
-            #Add the Batch Norm Layer
+            # Add the Batch Norm Layer
             if batch_normalize:
                 bn = nn.BatchNorm2d(filters)
                 module.add_module("batch_norm_{0}".format(index), bn)
 
-            #Check the activation.
-            #It is either Linear or a Leaky ReLU for YOLO
+            # Check the activation.
+            # It is either Linear or a Leaky ReLU for YOLO
             if activation == "leaky":
-                activn = nn.LeakyReLU(0.1, inplace = True)
+                activn = nn.LeakyReLU(0.1, inplace=True)
                 module.add_module("leaky_{0}".format(index), activn)
 
-            #If it's an upsampling layer
-            #We use Bilinear2dUpsampling
+            # If it's an upsampling layer
+            # We use Bilinear2dUpsampling
         elif (x["type"] == "upsample"):
             stride = int(x["stride"])
-            upsample = nn.Upsample(scale_factor = 2, mode = "nearest")
+            upsample = nn.Upsample(scale_factor=2, mode="nearest")
             module.add_module("upsample_{}".format(index), upsample)
 
-        #If it is a route layer
+        # If it is a route layer
         elif (x["type"] == "route"):
             x["layers"] = x["layers"].split(',')
-            #Start  of a route
+            # Start  of a route
             start = int(x["layers"][0])
-            #end, if there exists one.
+            # end, if there exists one.
             try:
                 end = int(x["layers"][1])
             except:
                 end = 0
-            #Positive anotation
+            # Positive anotation
             if start > 0:
                 start = start - index
             if end > 0:
@@ -521,21 +410,21 @@ def create_modules(blocks):
             if end < 0:
                 filters = output_filters[index + start] + output_filters[index + end]
             else:
-                filters= output_filters[index + start]
+                filters = output_filters[index + start]
 
-        #shortcut corresponds to skip connection
+        # shortcut corresponds to skip connection
         elif x["type"] == "shortcut":
             shortcut = EmptyLayer()
             module.add_module("shortcut_{}".format(index), shortcut)
 
-        #Yolo is the detection layer
+        # Yolo is the detection layer
         elif x["type"] == "yolo":
             mask = x["mask"].split(",")
             mask = [int(x) for x in mask]
 
             anchors = x["anchors"].split(",")
             anchors = [int(a) for a in anchors]
-            anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors),2)]
+            anchors = [(anchors[i], anchors[i + 1]) for i in range(0, len(anchors), 2)]
             anchors = [anchors[i] for i in mask]
 
             detection = DetectionLayer(anchors)
@@ -547,6 +436,7 @@ def create_modules(blocks):
 
     return (net_info, module_list)
 
+
 class Darknet(nn.Module):
     def __init__(self, cfgfile):
         super(Darknet, self).__init__()
@@ -555,7 +445,7 @@ class Darknet(nn.Module):
 
     def forward(self, x, CUDA):
         modules = self.blocks[1:]
-        outputs = {}   #We cache the outputs for the route layer
+        outputs = {}  # We cache the outputs for the route layer
 
         write = 0
         for i, module in enumerate(modules):
@@ -583,22 +473,22 @@ class Darknet(nn.Module):
                     x = torch.cat((map1, map2), 1)
 
 
-            elif  module_type == "shortcut":
+            elif module_type == "shortcut":
                 from_ = int(module["from"])
-                x = outputs[i-1] + outputs[i+from_]
+                x = outputs[i - 1] + outputs[i + from_]
 
             elif module_type == 'yolo':
                 anchors = self.module_list[i][0].anchors
-                #Get the input dimensions
-                inp_dim = int (self.net_info["height"])
+                # Get the input dimensions
+                inp_dim = int(self.net_info["height"])
 
-                #Get the number of classes
-                num_classes = int (module["classes"])
+                # Get the number of classes
+                num_classes = int(module["classes"])
 
-                #Transform
+                # Transform
                 x = x.data
                 x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
-                if not write:              #if no collector has been intialised.
+                if not write:  # if no collector has been intialised.
                     detections = x
                     write = 1
 
@@ -609,225 +499,213 @@ class Darknet(nn.Module):
 
         return detections
 
-
     def load_weights(self, weightfile):
-        #Open the weights file
+        # Open the weights file
         fp = open(weightfile, "rb")
 
-        #The first 5 values are header information
+        # The first 5 values are header information
         # 1. Major version number
         # 2. Minor Version Number
         # 3. Subversion number
         # 4,5. Images seen by the network (during training)
-        header = np.fromfile(fp, dtype = np.int32, count = 5)
+        header = np.fromfile(fp, dtype=np.int32, count=5)
         self.header = torch.from_numpy(header)
         self.seen = self.header[3]
 
-        weights = np.fromfile(fp, dtype = np.float32)
+        weights = np.fromfile(fp, dtype=np.float32)
 
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"]
 
-            #If module_type is convolutional load weights
-            #Otherwise ignore.
+            # If module_type is convolutional load weights
+            # Otherwise ignore.
 
             if module_type == "convolutional":
                 model = self.module_list[i]
                 try:
-                    batch_normalize = int(self.blocks[i+1]["batch_normalize"])
+                    batch_normalize = int(self.blocks[i + 1]["batch_normalize"])
                 except:
                     batch_normalize = 0
 
                 conv = model[0]
 
-
                 if (batch_normalize):
                     bn = model[1]
 
-                    #Get the number of weights of Batch Norm Layer
+                    # Get the number of weights of Batch Norm Layer
                     num_bn_biases = bn.bias.numel()
 
-                    #Load the weights
+                    # Load the weights
                     bn_biases = torch.from_numpy(weights[ptr:ptr + num_bn_biases])
                     ptr += num_bn_biases
 
                     bn_weights = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
-                    ptr  += num_bn_biases
+                    ptr += num_bn_biases
 
                     bn_running_mean = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
-                    ptr  += num_bn_biases
+                    ptr += num_bn_biases
 
                     bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
-                    ptr  += num_bn_biases
+                    ptr += num_bn_biases
 
-                    #Cast the loaded weights into dims of model weights.
+                    # Cast the loaded weights into dims of model weights.
                     bn_biases = bn_biases.view_as(bn.bias.data)
                     bn_weights = bn_weights.view_as(bn.weight.data)
                     bn_running_mean = bn_running_mean.view_as(bn.running_mean)
                     bn_running_var = bn_running_var.view_as(bn.running_var)
 
-                    #Copy the data to model
+                    # Copy the data to model
                     bn.bias.data.copy_(bn_biases)
                     bn.weight.data.copy_(bn_weights)
                     bn.running_mean.copy_(bn_running_mean)
                     bn.running_var.copy_(bn_running_var)
 
                 else:
-                    #Number of biases
+                    # Number of biases
                     num_biases = conv.bias.numel()
 
-                    #Load the weights
+                    # Load the weights
                     conv_biases = torch.from_numpy(weights[ptr: ptr + num_biases])
                     ptr = ptr + num_biases
 
-                    #reshape the loaded weights according to the dims of the model weights
+                    # reshape the loaded weights according to the dims of the model weights
                     conv_biases = conv_biases.view_as(conv.bias.data)
 
-                    #Finally copy the data
+                    # Finally copy the data
                     conv.bias.data.copy_(conv_biases)
 
-                #Let us load the weights for the Convolutional layers
+                # Let us load the weights for the Convolutional layers
                 num_weights = conv.weight.numel()
 
-                #Do the same as above for weights
-                conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
+                # Do the same as above for weights
+                conv_weights = torch.from_numpy(weights[ptr:ptr + num_weights])
                 ptr = ptr + num_weights
 
                 conv_weights = conv_weights.view_as(conv.weight.data)
                 conv.weight.data.copy_(conv_weights)
 
+
 def evaluate(image_set):
-  model = Darknet("cfg/yolov3.cfg")
-  model.load_weights("yolov3.weights")
+    model = Darknet("cfg/yolov3.cfg")
+    model.load_weights("yolov3.weights")
 
-  num_classes = len(coco.getCatIds())
+    classes = load_classes("./class_names.txt")
 
-  classes = []
-
-  for data in coco.loadCats(coco.getCatIds()):
-    classes.append(data["name"])
-
-  batch_size = 3
-  confidence = 0.5
-  nms_thesh = 0.4
-  start = 0
-  CUDA = torch.cuda.is_available()
-
-  if CUDA:
-    model.cuda()
-
-  inp_dim = int(model.net_info["height"])
-  assert inp_dim % 32 == 0
-  assert inp_dim > 32
-
-  #PyTorch Variables for images
-
-  im_batches = list(map(prep_image, image_set, [inp_dim for x in range(len(image_set))]))
-  im_dim_list = [(x.shape[1], x.shape[0]) for x in image_set]
-  im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)
-
-  if CUDA:
-      im_dim_list = im_dim_list.cuda()
+    num_classes = len(classes)
 
 
-  leftover = 0
-  if (len(im_dim_list) % batch_size):
-    leftover = 1
+    batch_size = 3
+    confidence = 0.5
+    nms_thesh = 0.4
 
-  if batch_size != 1:
-    num_batches = len(image_set) // batch_size + leftover
-    im_batches = [torch.cat((im_batches[i*batch_size : min((i +  1)*batch_size,
-                        len(im_batches))]))  for i in range(num_batches)]
+    model.net_info["height"] = 416
+    inp_dim = int(model.net_info["height"])
+    assert inp_dim % 32 == 0
+    assert inp_dim > 32
 
-  write = 0
-  start_det_loop = time.time()
-  for i, batch in enumerate(im_batches):
-      #load the image
-      if CUDA:
-          batch = batch.cuda()
+    CUDA = torch.cuda.is_available()
 
-      prediction = model(Variable(batch, volatile = True), CUDA)
+    if CUDA:
+        model.cuda()
 
-      prediction = write_results(prediction, confidence, num_classes, nms_conf = nms_thesh)
+    model.eval()
+
+    # PyTorch Variables for images
+
+    im_batches = list(map(prep_image, image_set, [inp_dim for x in range(len(image_set))]))
+    im_dim_list = [(x.shape[1], x.shape[0]) for x in image_set]
+    im_dim_list = torch.FloatTensor(im_dim_list).repeat(1, 2)
+
+    leftover = 0
+    if (len(im_dim_list) % batch_size):
+        leftover = 1
+
+    if batch_size != 1:
+        num_batches = len(image_set) // batch_size + leftover
+        im_batches = [torch.cat((im_batches[i * batch_size: min((i + 1) * batch_size,
+                                                                len(im_batches))])) for i in range(num_batches)]
+
+    write = 0
+
+    if CUDA:
+        im_dim_list = im_dim_list.cuda()
+
+    for i, batch in enumerate(im_batches):
+        # load the image
+        if CUDA:
+            batch = batch.cuda()
+        with torch.no_grad():
+            prediction = model(Variable(batch), CUDA)
+
+        #prediction = model(Variable(batch, volatile=True), CUDA)
+
+        prediction = write_results(prediction, confidence, num_classes, nms_conf=nms_thesh)
+
+        if type(prediction) == int:
+
+            for im_num, image in enumerate(image_set[i * batch_size: min((i + 1) * batch_size, len(image_set))]):
+                im_id = i * batch_size + im_num
+            continue
+
+        prediction[:, 0] += i * batch_size  # transform the atribute from index in batch to index in imlist
+
+        if not write:  # If we have't initialised output
+            output = prediction
+            write = 1
+        else:
+            output = torch.cat((output, prediction))
+
+        for im_num, image in enumerate(image_set[i * batch_size: min((i + 1) * batch_size, len(image_set))]):
+            im_id = i * batch_size + im_num
+
+        if CUDA:
+            torch.cuda.synchronize()
+
+    try:
+        output
+    except NameError:
+        print("No detections were made")
+        exit()
+
+    im_dim_list = torch.index_select(im_dim_list, 0, output[:, 0].long())
+
+    scaling_factor = torch.min(416 / im_dim_list, 1)[0].view(-1, 1)
+
+    output[:, [1, 3]] -= (inp_dim - scaling_factor * im_dim_list[:, 0].view(-1, 1)) / 2
+    output[:, [2, 4]] -= (inp_dim - scaling_factor * im_dim_list[:, 1].view(-1, 1)) / 2
+
+    output[:, 1:5] /= scaling_factor
+
+    for i in range(output.shape[0]):
+        output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim_list[i, 0])
+        output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim_list[i, 1])
 
 
-      prediction[:,0] += i*batch_size    #transform the atribute from index in batch to index in imlist
+    def write(x, results):
+        c1 = tuple((int(x[1].item()), int(x[2].item())))
+        c2 = tuple((int(x[3].item()), int(x[4].item())))
 
-      if not write:                      #If we have't initialised output
-          output = prediction
-          write = 1
-      else:
-          output = torch.cat((output,prediction))
+        img = results[int(x[0])]
 
-      for im_num, image in enumerate(image_set[i*batch_size: min((i +  1)*batch_size, len(image_set))]):
-          im_id = i*batch_size + im_num
-          objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
+        color = (int(np.random.randn() * 255), int(np.random.randn() * 255), int(np.random.randn() * 255))
+        cls = int(x[-1])
+        label = "{0}".format(classes[cls])
+        cv2.rectangle(img, c1, c2, color, 1)
+        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
+        c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+        cv2.rectangle(img, c1, c2, color, -1)
+        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1);
+        return img
 
-      if CUDA:
-          torch.cuda.synchronize()
+    list(map(lambda x: write(x, image_set), output))
 
-  try:
-      output
-  except NameError:
-      print ("No detections were made")
-      exit()
+    for img in image_set:
+        show_image(img)
 
-  im_dim_list = torch.index_select(im_dim_list, 0, output[:,0].long())
+    torch.cuda.empty_cache()
 
-  scaling_factor = torch.min(416/im_dim_list,1)[0].view(-1,1)
-
-
-  output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
-  output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
-
-
-
-  output[:,1:5] /= scaling_factor
-
-  for i in range(output.shape[0]):
-      output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim_list[i,0])
-      output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim_list[i,1])
-
-
-  output_recast = time.time()
-  class_load = time.time()
-  # colors = pkl.load(open("pallete", "rb"))
-
-  def write(x, results):
-      c1 = tuple((int(x[1].item()), int(x[2].item())))
-      c2 = tuple((int(x[3].item()), int(x[4].item())))
-
-      img = results[int(x[0])]
-
-      color = (int(np.random.randn() * 255), int(np.random.randn() * 255), int(np.random.randn() * 255))
-      cls = int(x[-1])
-      label = "{0}".format(classes[cls])
-      cv2.rectangle(img, c1, c2,color, 1)
-      t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
-      c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
-      cv2.rectangle(img, c1, c2, color, -1)
-      cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
-      return img
-
-  draw = time.time()
-  list(map(lambda x: write(x, image_set), output))
-
-  for img in image_set:
-    show_image(img)
-
-  torch.cuda.empty_cache()
-
-# load categories and images from annotated training sets;
-imgIds = coco.getImgIds()
-imgs = coco.loadImgs(imgIds)
-
-idx = int(np.random.randn() * 10000)
-image_data = np.array(imgs[idx:idx+5])
-
-images = [io.imread(x["coco_url"]) for x in image_data]
-
-evaluate(images)
 
 if __name__ == "__main__":
-    print("Hello, World!")
+    image = cv2.imread("./images/dog_bike_car.jpg")
+    evaluate([image])
