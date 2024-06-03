@@ -11,31 +11,12 @@ Original file is located at
 This project attempts to implement and train a YOLO (You Only Look Once) Object Detection model on the COCO 2017 dataset.
 """
 from __future__ import division
-# Commented out IPython magic to ensure Python compatibility.
-# %matplotlib inline
-from pycocotools.coco import COCO
-import numpy as np
-import skimage.io as io
-import matplotlib
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import matplotlib.colors as colors
-import pylab
-from zipfile import ZipFile, BadZipFile
-import os
-import pathlib
-
-pylab.rcParams['figure.figsize'] = (8.0, 10.0)
-
-
-
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Variable
 import cv2
-import time
-import pickle as pkl
 
 
 # Display image using the given image and (optionally) annotation
@@ -55,28 +36,6 @@ def show_image(image):
     plt.clf()
     plt.cla()
     plt.close()
-
-
-# helpers for acquiring annotations
-
-# return a list of annotations for a specific image id
-'''
-@param dict: a dictionary containing the annotations of images
-@param image: an image we want to find annotations for
-@return A list of annotations (bounding box + category)
-'''
-
-
-def get_annotations_for_image(dict, image):
-    return list(dict[image["id"]].values())[0]
-
-
-'''
-@param data: an image set following Coco file format
-@return a 2d dictionary where an image id is associated with a dictionary object that contains all annotations related to that id
-'''
-
-# utilities
 
 
 def unique(tensor):
@@ -99,7 +58,7 @@ def bbox_iou(box1, box2):
     b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
     b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
-    # get the corrdinates of the intersection rectangle
+    # get the coordinates of the intersection rectangle
     inter_rect_x1 = torch.max(b1_x1, b2_x1)
     inter_rect_y1 = torch.max(b1_y1, b2_y1)
     inter_rect_x2 = torch.min(b1_x2, b2_x2)
@@ -135,7 +94,7 @@ def write_results(prediction, confidence, num_classes, nms_conf=0.4):
 
     for ind in range(batch_size):
         image_pred = prediction[ind]  # image Tensor
-        # confidence threshholding
+        # confidence thresholding
         # NMS
 
         max_conf, max_conf_score = torch.max(image_pred[:, 5:5 + num_classes], 1)
@@ -638,26 +597,15 @@ def evaluate(image_set):
         with torch.no_grad():
             prediction = model(Variable(batch), CUDA)
 
-        #prediction = model(Variable(batch, volatile=True), CUDA)
-
         prediction = write_results(prediction, confidence, num_classes, nms_conf=nms_thesh)
-
-        if type(prediction) == int:
-
-            for im_num, image in enumerate(image_set[i * batch_size: min((i + 1) * batch_size, len(image_set))]):
-                im_id = i * batch_size + im_num
-            continue
 
         prediction[:, 0] += i * batch_size  # transform the atribute from index in batch to index in imlist
 
-        if not write:  # If we have't initialised output
+        if not write:  # If we haven't initialised output
             output = prediction
             write = 1
         else:
             output = torch.cat((output, prediction))
-
-        for im_num, image in enumerate(image_set[i * batch_size: min((i + 1) * batch_size, len(image_set))]):
-            im_id = i * batch_size + im_num
 
         if CUDA:
             torch.cuda.synchronize()
@@ -695,7 +643,7 @@ def evaluate(image_set):
         t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
         c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
         cv2.rectangle(img, c1, c2, color, -1)
-        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1);
+        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
         return img
 
     list(map(lambda x: write(x, image_set), output))
