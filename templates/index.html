@@ -16,6 +16,11 @@
             <input type="file" class="image" name="file" accept="image/*">
             <input type="submit" class="submit">
         </form>
+
+        {% if image %}
+        <h3>Results:</h3>
+        <img src = "{{image}}">
+        {% endif %}
     </main>
   </body>
 </html>

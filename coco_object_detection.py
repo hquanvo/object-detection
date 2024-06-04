@@ -648,11 +648,12 @@ def evaluate(image_set):
 
     list(map(lambda x: write(x, image_set), output))
 
-    for img in image_set:
-        show_image(img)
+    # for img in image_set:
+    #     show_image(img)
 
     torch.cuda.empty_cache()
 
+    return image_set
 
 if __name__ == "__main__":
     image = cv2.imread("./images/dog_bike_car.jpg")
