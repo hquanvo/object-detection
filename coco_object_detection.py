@@ -595,7 +595,7 @@ def evaluate(image_set):
         if CUDA:
             batch = batch.cuda()
         with torch.no_grad():
-            prediction = model(Variable(batch), CUDA)
+            prediction = model(batch, CUDA)
 
         prediction = write_results(prediction, confidence, num_classes, nms_conf=nms_thesh)
 
@@ -656,6 +656,5 @@ def evaluate(image_set):
     return image_set
 
 if __name__ == "__main__":
-    image = cv2.imread("./images/dog_bike_car.jpg")
-    print(type(image))
+    image = cv2.imread("./images/street.jpg")
     evaluate([image])
