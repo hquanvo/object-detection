@@ -4,11 +4,14 @@ from coco_object_detection import Darknet, load_classes, prep_image, write_resul
 import torch
 from torch.autograd import Variable
 import cv2
-
+from sort import Sort
 
 
 
 def camera_evaluate():
+
+    tracker = Sort()
+
     video = cv2.VideoCapture(0)
 
     model = Darknet("cfg/yolov3.cfg")
@@ -25,22 +28,6 @@ def camera_evaluate():
     inp_dim = int(model.net_info["height"])
     assert inp_dim % 32 == 0
     assert inp_dim > 32
-
-    def write(x, results):
-        c1 = tuple((int(x[1].item()), int(x[2].item())))
-        c2 = tuple((int(x[3].item()), int(x[4].item())))
-
-        img = results[int(x[0])]
-
-        color = (int(np.random.randn() * 255), int(np.random.randn() * 255), int(np.random.randn() * 255))
-        cls = int(x[-1])
-        label = "{0}".format(classes[cls])
-        cv2.rectangle(img, c1, c2, color, 1)
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
-        c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
-        cv2.rectangle(img, c1, c2, color, -1)
-        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
-        return img
 
 
     CUDA = torch.cuda.is_available()
@@ -76,12 +63,35 @@ def camera_evaluate():
 
             output[:, 1:5] /= scaling_factor
 
+
             for i in range(output.shape[0]):
                 output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim[i, 0])
                 output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim[i, 1])
 
+            detections = []
+            for obj in output:
+                detections.append([obj[1], obj[2], obj[3], obj[4], obj[5]])
 
-            list(map(lambda x: write(x, [frame]), output))
+            detections = np.array(detections)
+            tracked_objs = tracker.update(detections)
+            def write(x, y, results):
+                c1 = tuple((int(y[0].item()), int(y[1].item())))
+                c2 = tuple((int(y[2].item()), int(y[3].item())))
+                print(y)
+
+                img = results[int(x[0])]
+                cls = int(x[-1])
+                color = ((cls + 30) * (cls % 3), (cls + 30) * ((cls + 1) % 3), (cls + 30) * ((cls + 2) % 3))
+                id = int(y[-1])
+                label = "{0},ID:{1}".format(classes[cls], id)
+                cv2.rectangle(img, c1, c2, color, 1)
+                t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
+                c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+                cv2.rectangle(img, c1, c2, color, -1)
+                cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225, 255, 255], 1)
+                return img
+
+            list(map(lambda x, y: write(x,y, [frame]), output, tracked_objs))
 
 
 

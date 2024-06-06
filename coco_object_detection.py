@@ -625,20 +625,23 @@ def evaluate(image_set):
 
     output[:, 1:5] /= scaling_factor
 
+    ids = torch.arange(output.shape[0]).view(-1, 1)
+    output = torch.cat((output, ids), dim = 1)
     for i in range(output.shape[0]):
         output[i, [1, 3]] = torch.clamp(output[i, [1, 3]], 0.0, im_dim_list[i, 0])
         output[i, [2, 4]] = torch.clamp(output[i, [2, 4]], 0.0, im_dim_list[i, 1])
 
+    print(output)
 
     def write(x, results):
         c1 = tuple((int(x[1].item()), int(x[2].item())))
         c2 = tuple((int(x[3].item()), int(x[4].item())))
-
+        print(x)
         img = results[int(x[0])]
-
-        color = (int(np.random.randn() * 255), int(np.random.randn() * 255), int(np.random.randn() * 255))
-        cls = int(x[-1])
-        label = "{0}".format(classes[cls])
+        cls = int(x[-2])
+        color = ((cls + 30) * (cls % 3), (cls + 30) * ((cls + 1) % 3), (cls + 30) * ((cls + 2) % 3))
+        id = int(x[-1])
+        label = "{0},ID:{1}".format(classes[cls], id)
         cv2.rectangle(img, c1, c2, color, 1)
         t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, 1)[0]
         c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
@@ -656,5 +659,5 @@ def evaluate(image_set):
     return image_set
 
 if __name__ == "__main__":
-    image = cv2.imread("./images/street.jpg")
-    evaluate([image])
+    image = cv2.imread("./images/000000012576.jpg")
+    show_image(evaluate([image])[0])
